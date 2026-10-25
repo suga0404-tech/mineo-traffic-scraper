@@ -1,0 +1,10 @@
+.env
+.env.*
+*.pem
+token.json
+refresh_token*
+secrets/
+__pycache__/
+.venv/
+venv/
+.DS_Store

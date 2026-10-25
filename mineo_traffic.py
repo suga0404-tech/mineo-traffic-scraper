@@ -136,11 +136,14 @@ def refresh_access_token(cfg: dict, secrets: dict) -> dict:
             raise NetworkError(f"token HTTP {status}")
         if payload.get("error") == "invalid_token":
             raise AuthError(payload.get("error_description") or "invalid_token")
-        access = payload.get("access_token") or payload.get("id_token")
-        if not access:
-            raise AuthError("token 応答に access_token がありません")
+        access = payload.get("access_token") or ""
+        id_token = payload.get("id_token") or ""
+        if not id_token:
+            raise AuthError("token 応答に id_token がありません")
         expires_in = int(payload.get("expires_in") or 86400)
-        secrets["access_token"] = access
+        if access:
+            secrets["access_token"] = access
+        secrets["id_token"] = id_token
         secrets["access_expires_at"] = (
             datetime.now(TZ) + timedelta(seconds=expires_in)
         ).isoformat()
@@ -153,7 +156,7 @@ def refresh_access_token(cfg: dict, secrets: dict) -> dict:
 
 
 def access_token_valid(secrets: dict) -> bool:
-    token = (secrets.get("access_token") or "").strip()
+    token = (secrets.get("id_token") or "").strip()
     if not token:
         return False
     exp_raw = secrets.get("access_expires_at")
@@ -286,7 +289,7 @@ def main(argv: list[str] | None = None) -> int:
             secrets = refresh_access_token(cfg, secrets)
             save_secrets(secrets_path, secrets)
 
-        access = secrets["access_token"]
+        access = secrets["id_token"]
         cust_id = resolve_cust_id(cfg, secrets, access)
         if secrets.get("cust_id"):
             save_secrets(secrets_path, secrets)

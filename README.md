@@ -13,7 +13,7 @@ mineo アプリが利用する非公開 API（`POST https://api.eonet.jp/mineo/v
 
 ## 実行
 
-1. `~/local-ai/secrets/mineo-traffic.json` に `refresh_token` を置く（git 外）。初回は mineo アプリログインから mitm 等で取得。
+1. `~/local-ai/secrets/mineo-traffic.json` に `refresh_token` を置く（git 外）。初回の取り方は [`TOKEN_SETUP.md`](./TOKEN_SETUP.md)（PC の mitmproxy）。
 2. `~/local-ai/orchestrator/tasks/mineo-traffic-scraper/state/config.json` に `tel_num`（090…）を書く（[`config.example.json`](./config.example.json) 参照）。`cust_id` が分かれば secrets に直接書いてもよい。
 3. mini または LAN 上で:
 

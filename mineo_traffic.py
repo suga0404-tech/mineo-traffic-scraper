@@ -270,6 +270,29 @@ def build_report(cfg: dict, daily: dict[date, int], ref: datetime) -> dict:
     }
 
 
+def previous_rolling_mb(path: Path) -> int | None:
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(data, dict) or "rolling_3d_mb" not in data:
+        return None
+    try:
+        return int(data["rolling_3d_mb"])
+    except (TypeError, ValueError):
+        return None
+
+
+def attach_daily_diff(report: dict, previous_mb: int | None) -> None:
+    if previous_mb is None:
+        report["daily_mb"] = None
+        report["daily_note"] = "前回の3日合計が無いので日次差分はありません"
+        return
+    report["daily_mb"] = int(report["rolling_3d_mb"]) - previous_mb
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = argv if argv is not None else sys.argv[1:]
     config_path = None
@@ -301,6 +324,7 @@ def main(argv: list[str] | None = None) -> int:
 
         state_dir.mkdir(parents=True, exist_ok=True)
         out_path = state_dir / "latest.json"
+        attach_daily_diff(report, previous_rolling_mb(out_path))
         out_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print(json.dumps(report, ensure_ascii=False))
         return 0

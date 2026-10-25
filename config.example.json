@@ -1,0 +1,14 @@
+{
+  "quota_mb": 10240,
+  "tel_num": "",
+  "state_dir": "~/local-ai/orchestrator/tasks/mineo-traffic-scraper/state",
+  "log_path": "~/local-ai/orchestrator/tasks/mineo-traffic-scraper/logs/run.log",
+  "secrets_path": "~/local-ai/secrets/mineo-traffic.json",
+  "token_url": "https://login.eonet.jp/oidc/v1/token",
+  "api_base": "https://api.eonet.jp/mineo/v1/",
+  "client_id": "100064798",
+  "app_id": "MineoTrafficCli",
+  "app_version": "1.0.0",
+  "aid": "cli",
+  "http_timeout_sec": 30
+}

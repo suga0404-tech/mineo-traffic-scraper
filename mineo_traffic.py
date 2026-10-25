@@ -270,14 +270,19 @@ def build_report(cfg: dict, daily: dict[date, int], ref: datetime) -> dict:
     }
 
 
-def previous_rolling_mb(path: Path) -> int | None:
+def load_previous_report(path: Path) -> dict | None:
     if not path.exists():
         return None
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
-    if not isinstance(data, dict) or "rolling_3d_mb" not in data:
+    return data if isinstance(data, dict) else None
+
+
+def previous_rolling_mb(path: Path) -> int | None:
+    data = load_previous_report(path)
+    if not data or "rolling_3d_mb" not in data:
         return None
     try:
         return int(data["rolling_3d_mb"])
@@ -291,6 +296,62 @@ def attach_daily_diff(report: dict, previous_mb: int | None) -> None:
         report["daily_note"] = "前回の3日合計が無いので日次差分はありません"
         return
     report["daily_mb"] = int(report["rolling_3d_mb"]) - previous_mb
+
+
+def attach_usage_alerts(report: dict, previous_mb: int | None) -> None:
+    """Soft pace notices (not hard limits). stdout JSON carries alerts; lines also go to stderr."""
+    quota = int(report["quota_mb"])
+    rolling = int(report["rolling_3d_mb"])
+    remaining = int(report["remaining_mb"])
+    prev = previous_mb if previous_mb is not None else 0
+    soft_day = max(1, quota // 3)
+
+    alerts: list[dict[str, str]] = []
+    checkpoints = (
+        (soft_day, 1, "約3.3GB相当"),
+        (2 * soft_day, 2, "約6.6GB相当"),
+        (quota, 3, "約10GB相当"),
+    )
+    for cp_mb, day_index, label in checkpoints:
+        if prev < cp_mb <= rolling:
+            days_left = max(0, 3 - day_index)
+            rem_gb = remaining / 1024.0
+            alerts.append(
+                {
+                    "level": "notice",
+                    "kind": "pace_soft",
+                    "message": (
+                        f"緩やかな目安（{label}）を超えました。"
+                        f"3日10GB枠の残りはおおよそ {rem_gb:.1f}GB、"
+                        f"あと約{days_left}日分の周期です（厳密な上限ではありません）。"
+                    ),
+                }
+            )
+
+    day_rows = report.get("days") or []
+    if len(day_rows) >= 3:
+        newest = day_rows[-1]
+        newest_mb = int(newest.get("mb") or 0)
+        newest_date = str(newest.get("date") or report.get("history_through") or "")
+        heavy_last_day = newest_mb >= int(soft_day * 0.75)
+        low_headroom = remaining <= soft_day
+        if newest_mb > 0 and (heavy_last_day or low_headroom):
+            rem_gb = remaining / 1024.0
+            alerts.append(
+                {
+                    "level": "info",
+                    "kind": "window_day3",
+                    "message": (
+                        f"3日目（{newest_date}）のデータが載っています。"
+                        f"枠残り約 {rem_gb:.1f}GB。"
+                        f"明日ロールで最古日が外れるまで、早めに余裕を確認してください。"
+                    ),
+                }
+            )
+
+    report["alerts"] = alerts
+    for item in alerts:
+        print(item["message"], file=sys.stderr)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -324,7 +385,14 @@ def main(argv: list[str] | None = None) -> int:
 
         state_dir.mkdir(parents=True, exist_ok=True)
         out_path = state_dir / "latest.json"
-        attach_daily_diff(report, previous_rolling_mb(out_path))
+        prev_report = load_previous_report(out_path)
+        prev_rolling = (
+            int(prev_report["rolling_3d_mb"])
+            if prev_report and "rolling_3d_mb" in prev_report
+            else None
+        )
+        attach_daily_diff(report, prev_rolling)
+        attach_usage_alerts(report, prev_rolling)
         out_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print(json.dumps(report, ensure_ascii=False))
         return 0
